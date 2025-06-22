@@ -1,0 +1,26 @@
+{
+  "name": "does-panda-have-work-shift",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "fetch-data": "mkdir -p data && wget \"${SOURCE_URL}\" -O \"${FILE_NAME}\"",
+    "process-data": "vite-node scripts/load-data.ts \"${FILE_NAME}\" \"${OUTPUT_FILE_NAME}\" \"${WORKER_NAME}\""
+  },
+  "dependencies": {
+    "@types/node": "^24.0.3",
+    "vite-node": "^3.2.4",
+    "vue": "^3.5.13",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.3",
+    "@vue/tsconfig": "^0.7.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vue-tsc": "^2.2.8"
+  }
+}

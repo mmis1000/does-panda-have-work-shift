@@ -63,7 +63,7 @@ function processShifts(data: MonthSchedule[]) {
 
 onMounted(async () => {
   try {
-    const response = await fetch('/data/panda.json');
+    const response = await fetch('/does-panda-have-work-shift/data/panda.json');
     if (!response.ok) {
       throw new Error('Network response was not ok');
     }

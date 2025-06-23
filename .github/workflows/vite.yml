@@ -37,6 +37,17 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm install
+      - name: Fetch data
+        run: npm run fetch-data
+        env:
+          SOURCE_URL: ${{ secrets.SOURCE_URL }}
+          FILE_NAME: ${{ secrets.FILE_NAME }}
+      - name: Process data
+        run: npm run process-data
+        env:
+          FILE_NAME: ${{ secrets.FILE_NAME }}
+          OUTPUT_FILE_NAME: ${{ secrets.OUTPUT_FILE_NAME }}
+          WORKER_NAME: ${{ secrets.WORKER_NAME }}
       - name: Build
         run: npm run build
         env:

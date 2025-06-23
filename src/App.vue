@@ -63,7 +63,7 @@ function processShifts(data: MonthSchedule[]) {
 
 onMounted(async () => {
   try {
-    const response = await fetch('/does-panda-have-work-shift/data/panda.json');
+    const response = await fetch(import.meta.env.BASE + 'data/panda.json');
     if (!response.ok) {
       throw new Error('Network response was not ok');
     }
@@ -193,7 +193,7 @@ const timelineStyle = computed((): CSSProperties => {
 
 <template>
   <div class="container">
-    <h1 class="title">Panda 現在在上班嗎？</h1>
+    <h1 class="title">Panda <span style="white-space: nowrap;">現在在上班嗎？</span></h1>
     <h2 class="status" :class="{ 'on-duty': currentStatus === '在上班' }">
       {{ isLoading ? '讀取中...' : currentStatus }}
     </h2>
@@ -244,6 +244,7 @@ const timelineStyle = computed((): CSSProperties => {
 .title {
   font-size: 2.5rem;
   font-weight: bold;
+  line-height: 1.4;
   margin-bottom: 1rem;
 }
 
@@ -265,8 +266,9 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .schedule-container {
-  width: 100%;
+  width: calc(100% + 50px);
   position: relative;
+  margin-left: -50px;
 }
 
 .time-axis {

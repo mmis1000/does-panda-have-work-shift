@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, type CSSProperties } from 'vue';
+import { ref, onMounted, computed, type CSSProperties } from "vue";
 
 interface Shift {
   date: number;
@@ -20,7 +20,7 @@ interface WorkInterval {
 const SHIFT_TYPES = {
   MORNING: 1, // 早班 (0800-1600)
   EVENING: 2, // 晚班 (1600-2400)
-  NIGHT: 3,   // 大夜 (2400-0800)
+  NIGHT: 3, // 大夜 (2400-0800)
 } as const;
 
 const scheduleData = ref<MonthSchedule[]>([]);
@@ -30,26 +30,36 @@ const isLoading = ref(true);
 
 function processShifts(data: MonthSchedule[]) {
   const intervals: WorkInterval[] = [];
-  data.forEach(monthData => {
-    monthData.shifts.forEach(shift => {
-      if (typeof shift.value === 'number') {
+  data.forEach((monthData) => {
+    monthData.shifts.forEach((shift) => {
+      if (typeof shift.value === "number") {
         const year = monthData.year;
         const month = monthData.month - 1;
         const day = shift.date;
 
         let start: Date, end: Date;
 
-        if (shift.value === SHIFT_TYPES.MORNING) { // 早班 08-16
+        if (shift.value === SHIFT_TYPES.MORNING) {
+          // 早班 08-16
           start = new Date(year, month, day, 8, 0, 0);
           end = new Date(year, month, day, 16, 0, 0);
-        } else if (shift.value === SHIFT_TYPES.EVENING) { // 晚班 16-24
-          start = new Date(year, month, day, 16, 0, 0);
-          end = new Date(year, month, day, 23, 59, 59);
-        } else if (shift.value === SHIFT_TYPES.NIGHT) { // 大夜 00-08
+        } else if (shift.value === SHIFT_TYPES.EVENING) {
+          // 晚班 16-24
           const nextDay = new Date(year, month, day);
           nextDay.setDate(nextDay.getDate() + 1);
-          start = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), 0, 0, 0);
-          end = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), 8, 0, 0);
+          start = new Date(year, month, day, 16, 0, 0);
+          end = new Date(
+            nextDay.getFullYear(),
+            nextDay.getMonth(),
+            nextDay.getDate(),
+            0,
+            0,
+            0
+          );
+        } else if (shift.value === SHIFT_TYPES.NIGHT) {
+          // 大夜 00-08
+          start = new Date(year, month, day, 0, 0, 0);
+          end = new Date(year, month, day, 8, 0, 0);
         } else {
           return;
         }
@@ -63,35 +73,15 @@ function processShifts(data: MonthSchedule[]) {
 
 onMounted(async () => {
   try {
-    const response = await fetch(import.meta.env.BASE + 'data/panda.json');
+    const response = await fetch(import.meta.env.BASE + "data/panda.json");
     if (!response.ok) {
-      throw new Error('Network response was not ok');
+      throw new Error("Network response was not ok");
     }
     const data: MonthSchedule[] = await response.json();
     scheduleData.value = data;
     workIntervals.value = processShifts(data);
-    
-    // Find today's date at 8 AM to align the schedule view
-    const today = new Date();
-    if (today.getHours() < 8) {
-        today.setDate(today.getDate() - 1);
-    }
-    today.setHours(8, 0, 0, 0);
-    
-    // Find index of today's schedule
-    const todayShiftIndex = data.findIndex(m => m.year === today.getFullYear() && m.month === today.getMonth() + 1);
-    
-    if (todayShiftIndex !== -1) {
-        const monthData = data[todayShiftIndex];
-        const dayIndex = monthData.shifts.findIndex(s => s.date === today.getDate());
-        if(dayIndex !== -1) {
-           // We have the data, now just need to display it
-        }
-    }
-
-
   } catch (error) {
-    console.error('Failed to load schedule data:', error);
+    console.error("Failed to load schedule data:", error);
   } finally {
     isLoading.value = false;
   }
@@ -102,19 +92,21 @@ onMounted(async () => {
 });
 
 const activeShift = computed(() => {
-    const currentTime = now.value.getTime();
-    return workIntervals.value.find(interval => 
-        currentTime >= interval.start.getTime() && currentTime < interval.end.getTime()
-    );
+  const currentTime = now.value.getTime();
+  return workIntervals.value.find(
+    (interval) =>
+      currentTime >= interval.start.getTime() &&
+      currentTime < interval.end.getTime()
+  );
 });
 
 const currentStatus = computed(() => {
-  return activeShift.value ? '在上班' : '在休息';
+  return activeShift.value ? "在上班" : "在休息";
 });
 
 const shiftTimeInfo = computed(() => {
   const currentTime = now.value.getTime();
-  
+
   if (activeShift.value) {
     // Currently on duty, show time until shift ends
     const diff = activeShift.value.end.getTime() - currentTime;
@@ -123,16 +115,18 @@ const shiftTimeInfo = computed(() => {
     return `距離下班還有：${hours}h ${minutes}min`;
   } else {
     // Currently resting, find next shift
-    const nextShift = workIntervals.value.find(interval => interval.start.getTime() > currentTime);
-    
+    const nextShift = workIntervals.value.find(
+      (interval) => interval.start.getTime() > currentTime
+    );
+
     if (!nextShift) {
-      return '沒有更多班表資訊';
+      return "沒有更多班表資訊";
     }
 
     const diff = nextShift.start.getTime() - currentTime;
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     return `離下次上班還有：${hours}h ${minutes}min`;
   }
 });
@@ -142,28 +136,53 @@ const scheduleForDisplay = computed(() => {
 
   const displayDays = 5;
   const today = new Date();
-  
+
   // If it's before 8 AM, we should consider "today" as the previous day for schedule purposes
-   if (now.value.getHours() < 8) {
-     today.setDate(today.getDate() - 1);
-   }
+  if (now.value.getHours() < 8) {
+    today.setDate(today.getDate() - 1);
+  }
 
   const result = [];
 
   for (let i = 0; i < displayDays; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
-    
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     const day = date.getDate();
+    const monthData = scheduleData.value.find(
+      (m) => m.year === year && m.month === month
+    );
+    const shift = monthData?.shifts.find((s) => s.date === day);
+    const shiftResult =
+      shift != null &&
+      (shift.value === SHIFT_TYPES.MORNING ||
+        shift.value === SHIFT_TYPES.EVENING)
+        ? shift.value
+        : null;
 
-    const monthData = scheduleData.value.find(m => m.year === year && m.month === month);
-    const shift = monthData?.shifts.find(s => s.date === day);
+    const nextDay = new Date(date);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const nextDayYear = nextDay.getFullYear();
+    const nextDayMonth = nextDay.getMonth() + 1;
+    const nextDayDay = nextDay.getDate();
+    const monthDataNextDay = scheduleData.value.find(
+      (m) => m.year === nextDayYear && m.month === nextDayMonth
+    );
+    const shiftNextDay = monthDataNextDay?.shifts.find(
+      (s) => s.date === nextDayDay
+    );
+    const shiftResultNextDay =
+      shiftNextDay != null && shiftNextDay.value === SHIFT_TYPES.NIGHT
+        ? shiftNextDay.value
+        : null;
 
     result.push({
-      dateLabel: `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`,
-      shift: shift ? shift.value : '無資料',
+      dateLabel: `${String(month).padStart(2, "0")}/${String(day).padStart(
+        2,
+        "0"
+      )}`,
+      shift: shiftResult ?? shiftResultNextDay ?? "無資料",
     });
   }
   return result;
@@ -182,22 +201,26 @@ const timelineStyle = computed((): CSSProperties => {
 
   const minutesSince8AM = (now_.getTime() - today8AM.getTime()) / (1000 * 60);
   const totalMinutesInCycle = 24 * 60;
-  const percent = Math.max(0, Math.min(100, (minutesSince8AM / totalMinutesInCycle) * 100));
+  const percent = Math.max(
+    0,
+    Math.min(100, (minutesSince8AM / totalMinutesInCycle) * 100)
+  );
 
   return {
     left: `${percent}%`,
   };
 });
-
 </script>
 
 <template>
   <div class="container">
-    <h1 class="title">Panda <span style="white-space: nowrap;">現在在上班嗎？</span></h1>
+    <h1 class="title">
+      Panda <span style="white-space: nowrap">現在在上班嗎？</span>
+    </h1>
     <h2 class="status" :class="{ 'on-duty': currentStatus === '在上班' }">
-      {{ isLoading ? '讀取中...' : currentStatus }}
+      {{ isLoading ? "讀取中..." : currentStatus }}
     </h2>
-    <p class="countdown">{{ isLoading ? '' : shiftTimeInfo }}</p>
+    <p class="countdown">{{ isLoading ? "" : shiftTimeInfo }}</p>
 
     <div class="schedule-container">
       <div class="time-axis">
@@ -208,16 +231,27 @@ const timelineStyle = computed((): CSSProperties => {
         <span class="day-mark">D+1</span>
       </div>
       <div class="schedule-grid">
-        <div v-for="(day, index) in scheduleForDisplay" :key="day.dateLabel" class="day-row">
+        <div
+          v-for="(day, index) in scheduleForDisplay"
+          :key="day.dateLabel"
+          class="day-row"
+        >
           <div class="date-label">{{ day.dateLabel }}</div>
           <div class="shifts">
             <div
               v-for="shiftType in Object.values(SHIFT_TYPES)"
               :key="shiftType"
               class="shift-block"
-              :class="{ 'work': day.shift === shiftType, 'rest': day.shift !== shiftType }">
-            </div>
-            <div v-if="index === 0" class="timeline-indicator" :style="timelineStyle"></div>
+              :class="{
+                work: day.shift === shiftType,
+                rest: day.shift !== shiftType,
+              }"
+            ></div>
+            <div
+              v-if="index === 0"
+              class="timeline-indicator"
+              :style="timelineStyle"
+            ></div>
           </div>
         </div>
       </div>
@@ -252,11 +286,13 @@ const timelineStyle = computed((): CSSProperties => {
   font-size: 2rem;
   font-weight: bold;
   margin-bottom: 0.5rem;
-  color: #50fa7b; /* Green for rest */
+  color: #50fa7b;
+  /* Green for rest */
 }
 
 .status.on-duty {
-  color: #ff5555; /* Red for on-duty */
+  color: #ff5555;
+  /* Red for on-duty */
 }
 
 .countdown {
@@ -274,7 +310,8 @@ const timelineStyle = computed((): CSSProperties => {
 .time-axis {
   position: relative;
   height: 1.5em;
-  margin-left: calc(50px + 1px); /* date-label-width + date-label-border */
+  margin-left: calc(50px + 1px);
+  /* date-label-width + date-label-border */
   margin-bottom: 0.5rem;
   color: #6272a4;
 }
@@ -284,10 +321,25 @@ const timelineStyle = computed((): CSSProperties => {
   font-size: 0.9em;
 }
 
-.time-axis .time-mark.start { left: 0%; transform: translateX(0); }
-.time-axis .time-mark.mid-1 { left: 33.333%; transform: translateX(-50%); }
-.time-axis .time-mark.mid-2 { left: 66.666%; transform: translateX(-50%); }
-.time-axis .time-mark.end { left: 100%; transform: translateX(-100%); }
+.time-axis .time-mark.start {
+  left: 0%;
+  transform: translateX(0);
+}
+
+.time-axis .time-mark.mid-1 {
+  left: 33.333%;
+  transform: translateX(-50%);
+}
+
+.time-axis .time-mark.mid-2 {
+  left: 66.666%;
+  transform: translateX(-50%);
+}
+
+.time-axis .time-mark.end {
+  left: 100%;
+  transform: translateX(-100%);
+}
 
 .time-axis .day-mark {
   left: 83.333%;
@@ -299,8 +351,9 @@ const timelineStyle = computed((): CSSProperties => {
   position: relative;
   border-right: 1px solid #44475a;
 }
+
 .schedule-grid::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: calc(50px + 1px);
@@ -314,8 +367,9 @@ const timelineStyle = computed((): CSSProperties => {
   align-items: center;
   position: relative;
 }
+
 .day-row::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: calc(50px + 1px);
@@ -350,11 +404,13 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .work {
-  background-color: #ffb86c; /* Orange/Pink-ish */
+  background-color: #ffb86c;
+  /* Orange/Pink-ish */
 }
 
 .rest {
-  background-color: #50fa7b; /* Green */
+  background-color: #50fa7b;
+  /* Green */
 }
 
 .timeline-indicator {
@@ -366,5 +422,4 @@ const timelineStyle = computed((): CSSProperties => {
   transform: translateX(-50%);
   z-index: 10;
 }
-
 </style>

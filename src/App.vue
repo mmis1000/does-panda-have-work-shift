@@ -131,6 +131,8 @@ const shiftTimeInfo = computed(() => {
   }
 });
 
+type Status = 'WORK' | 'REST' | 'UNKNOWN';
+
 const scheduleForDisplay = computed(() => {
   if (!scheduleData.value.length) return [];
 
@@ -160,6 +162,14 @@ const scheduleForDisplay = computed(() => {
         shift.value === SHIFT_TYPES.EVENING)
         ? shift.value
         : null;
+    const shiftColor = shift == null ?
+    ['UNKNOWN', 'UNKNOWN'] as const :
+    shift.value === SHIFT_TYPES.MORNING ?
+  ['WORK', 'REST'] as const :
+  shift.value === SHIFT_TYPES.EVENING ?
+  ['REST', 'WORK'] as const :
+  ['REST', 'REST'] as const
+
 
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
@@ -176,13 +186,20 @@ const scheduleForDisplay = computed(() => {
       shiftNextDay != null && shiftNextDay.value === SHIFT_TYPES.NIGHT
         ? shiftNextDay.value
         : null;
+    const shiftColorNextDay = shiftNextDay == null ?
+    ['UNKNOWN'] as const :
+    shiftNextDay.value === SHIFT_TYPES.NIGHT ?
+  ['WORK'] as const :
+  ['REST'] as const
+
+    const shifts: [Status, Status, Status] = [...shiftColor, ...shiftColorNextDay]
 
     result.push({
       dateLabel: `${String(month).padStart(2, "0")}/${String(day).padStart(
         2,
         "0"
       )}`,
-      shift: shiftResult ?? shiftResultNextDay ?? "無資料",
+      shifts,
     });
   }
   return result;
@@ -239,12 +256,13 @@ const timelineStyle = computed((): CSSProperties => {
           <div class="date-label">{{ day.dateLabel }}</div>
           <div class="shifts">
             <div
-              v-for="shiftType in Object.values(SHIFT_TYPES)"
+              v-for="shiftType of day.shifts"
               :key="shiftType"
               class="shift-block"
               :class="{
-                work: day.shift === shiftType,
-                rest: day.shift !== shiftType,
+                work: shiftType === 'WORK',
+                rest: shiftType === 'REST',
+                unknown: shiftType === 'UNKNOWN',
               }"
             ></div>
             <div
@@ -411,6 +429,10 @@ const timelineStyle = computed((): CSSProperties => {
 .rest {
   background-color: #50fa7b;
   /* Green */
+}
+
+.unknown {
+  background-color: #6272a4;
 }
 
 .timeline-indicator {

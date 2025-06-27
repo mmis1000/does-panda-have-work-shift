@@ -131,7 +131,7 @@ const shiftTimeInfo = computed(() => {
   }
 });
 
-type Status = 'WORK' | 'REST' | 'UNKNOWN';
+type Status = "WORK" | "REST" | "UNKNOWN";
 
 const scheduleForDisplay = computed(() => {
   if (!scheduleData.value.length) return [];
@@ -156,20 +156,14 @@ const scheduleForDisplay = computed(() => {
       (m) => m.year === year && m.month === month
     );
     const shift = monthData?.shifts.find((s) => s.date === day);
-    const shiftResult =
-      shift != null &&
-      (shift.value === SHIFT_TYPES.MORNING ||
-        shift.value === SHIFT_TYPES.EVENING)
-        ? shift.value
-        : null;
-    const shiftColor = shift == null ?
-    ['UNKNOWN', 'UNKNOWN'] as const :
-    shift.value === SHIFT_TYPES.MORNING ?
-  ['WORK', 'REST'] as const :
-  shift.value === SHIFT_TYPES.EVENING ?
-  ['REST', 'WORK'] as const :
-  ['REST', 'REST'] as const
-
+    const shiftColor =
+      shift == null
+        ? (["UNKNOWN", "UNKNOWN"] as const)
+        : shift.value === SHIFT_TYPES.MORNING
+        ? (["WORK", "REST"] as const)
+        : shift.value === SHIFT_TYPES.EVENING
+        ? (["REST", "WORK"] as const)
+        : (["REST", "REST"] as const);
 
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
@@ -182,17 +176,17 @@ const scheduleForDisplay = computed(() => {
     const shiftNextDay = monthDataNextDay?.shifts.find(
       (s) => s.date === nextDayDay
     );
-    const shiftResultNextDay =
-      shiftNextDay != null && shiftNextDay.value === SHIFT_TYPES.NIGHT
-        ? shiftNextDay.value
-        : null;
-    const shiftColorNextDay = shiftNextDay == null ?
-    ['UNKNOWN'] as const :
-    shiftNextDay.value === SHIFT_TYPES.NIGHT ?
-  ['WORK'] as const :
-  ['REST'] as const
+    const shiftColorNextDay =
+      shiftNextDay == null
+        ? (["UNKNOWN"] as const)
+        : shiftNextDay.value === SHIFT_TYPES.NIGHT
+        ? (["WORK"] as const)
+        : (["REST"] as const);
 
-    const shifts: [Status, Status, Status] = [...shiftColor, ...shiftColorNextDay]
+    const shifts: [Status, Status, Status] = [
+      ...shiftColor,
+      ...shiftColorNextDay,
+    ];
 
     result.push({
       dateLabel: `${String(month).padStart(2, "0")}/${String(day).padStart(

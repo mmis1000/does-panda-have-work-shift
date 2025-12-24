@@ -41,6 +41,5 @@ for idx in "${!SOURCE_URL_LIST[@]}"; do
     mkdir -p "$dir_path"
   fi
 
-  echo "Downloading ${url} -> ${file}"
   wget "$url" -O "$file"
 done

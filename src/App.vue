@@ -271,8 +271,8 @@ const timelineStyle = computed((): CSSProperties => {
           </div>
         </div>
       </div>
-      <button class="load-more" @click="loadMore">Load More</button>
     </div>
+    <button class="load-more" @click="loadMore">Load More</button>
   </div>
 </template>
 

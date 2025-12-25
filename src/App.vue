@@ -133,10 +133,14 @@ const shiftTimeInfo = computed(() => {
 
 type Status = "WORK" | "REST" | "UNKNOWN";
 
+const displayDays = ref(5)
+const loadMore = () => {
+  displayDays.value += 5;
+}
+
 const scheduleForDisplay = computed(() => {
   if (!scheduleData.value.length) return [];
 
-  const displayDays = 5;
   const today = new Date();
 
   // If it's before 8 AM, we should consider "today" as the previous day for schedule purposes
@@ -146,7 +150,7 @@ const scheduleForDisplay = computed(() => {
 
   const result = [];
 
-  for (let i = 0; i < displayDays; i++) {
+  for (let i = 0; i < displayDays.value; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     const year = date.getFullYear();
@@ -267,6 +271,7 @@ const timelineStyle = computed((): CSSProperties => {
           </div>
         </div>
       </div>
+      <button class="load-more" @click="loadMore">Load More</button>
     </div>
   </div>
 </template>
@@ -437,5 +442,31 @@ const timelineStyle = computed((): CSSProperties => {
   background-color: red;
   transform: translateX(-50%);
   z-index: 10;
+}
+
+.load-more {
+  margin: 1.5rem auto 0;
+  padding: 0.75rem 2.5rem;
+  border: 1px solid #8be9fd;
+  border-radius: 999px;
+  background: transparent;
+  color: #f8f8f2;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.load-more:hover {
+  background-color: #8be9fd;
+  color: #282a36;
+  box-shadow: 0 0 12px rgba(139, 233, 253, 0.5);
+}
+
+.load-more:active {
+  transform: scale(0.98);
 }
 </style>

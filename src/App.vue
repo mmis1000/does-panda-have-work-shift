@@ -89,6 +89,24 @@ onMounted(async () => {
   setInterval(() => {
     now.value = new Date();
   }, 1000);
+
+  // reload data every 1 minute
+  setInterval(() => {
+    fetch(import.meta.env.BASE + "data/panda.json")
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      return response.json();
+    })
+      .then((data) => {
+        scheduleData.value = data;
+        workIntervals.value = processShifts(data);
+      })
+      .catch((error) => {
+        console.error("Failed to reload schedule data:", error);
+      });
+  }, 60000);
 });
 
 const activeShift = computed(() => {

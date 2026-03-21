@@ -23,7 +23,7 @@ a:hover {
 
 body {
   margin: 0;
-  background-color: #1a1a1a;
+  background: radial-gradient(ellipse at 50% 0%, #1f2035 0%, #141420 60%, #0e0e18 100%);
   display: flex;
   align-items: center;
   justify-content: center;

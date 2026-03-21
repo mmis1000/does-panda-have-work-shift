@@ -23,6 +23,8 @@ const SHIFT_TYPES = {
   NIGHT: 3, // 大夜 (2400-0800)
 } as const;
 
+const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"] as const;
+
 const scheduleData = ref<MonthSchedule[]>([]);
 const workIntervals = ref<WorkInterval[]>([]);
 const now = ref(new Date());
@@ -40,24 +42,14 @@ function processShifts(data: MonthSchedule[]) {
         let start: Date, end: Date;
 
         if (shift.value === SHIFT_TYPES.MORNING) {
-          // 早班 08-16
           start = new Date(year, month, day, 8, 0, 0);
           end = new Date(year, month, day, 16, 0, 0);
         } else if (shift.value === SHIFT_TYPES.EVENING) {
-          // 晚班 16-24
           const nextDay = new Date(year, month, day);
           nextDay.setDate(nextDay.getDate() + 1);
           start = new Date(year, month, day, 16, 0, 0);
-          end = new Date(
-            nextDay.getFullYear(),
-            nextDay.getMonth(),
-            nextDay.getDate(),
-            0,
-            0,
-            0
-          );
+          end = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), 0, 0, 0);
         } else if (shift.value === SHIFT_TYPES.NIGHT) {
-          // 大夜 00-08
           start = new Date(year, month, day, 0, 0, 0);
           end = new Date(year, month, day, 8, 0, 0);
         } else {
@@ -67,16 +59,13 @@ function processShifts(data: MonthSchedule[]) {
       }
     });
   });
-  // Sort intervals by start time
   return intervals.sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
 onMounted(async () => {
   try {
     const response = await fetch(import.meta.env.BASE + "data/panda.json");
-    if (!response.ok) {
-      throw new Error("Network response was not ok");
-    }
+    if (!response.ok) throw new Error("Network response was not ok");
     const data: MonthSchedule[] = await response.json();
     scheduleData.value = data;
     workIntervals.value = processShifts(data);
@@ -86,85 +75,53 @@ onMounted(async () => {
     isLoading.value = false;
   }
 
-  setInterval(() => {
-    now.value = new Date();
-  }, 1000);
+  setInterval(() => { now.value = new Date(); }, 1000);
 
-  // reload data every 1 minute
   setInterval(() => {
     fetch(import.meta.env.BASE + "data/panda.json")
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-      return response.json();
-    })
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data) => {
         scheduleData.value = data;
         workIntervals.value = processShifts(data);
       })
-      .catch((error) => {
-        console.error("Failed to reload schedule data:", error);
-      });
+      .catch((e) => console.error("Failed to reload schedule data:", e));
   }, 60000);
 });
 
-const activeShift = computed(() => {
-  const currentTime = now.value.getTime();
-  return workIntervals.value.find(
-    (interval) =>
-      currentTime >= interval.start.getTime() &&
-      currentTime < interval.end.getTime()
-  );
-});
+const activeShift = computed(() =>
+  workIntervals.value.find(
+    (i) => now.value.getTime() >= i.start.getTime() && now.value.getTime() < i.end.getTime()
+  )
+);
 
-const currentStatus = computed(() => {
-  return activeShift.value ? "在上班" : "在休息";
-});
+const currentStatus = computed(() => (activeShift.value ? "在上班" : "在休息"));
 
 const shiftTimeInfo = computed(() => {
   const currentTime = now.value.getTime();
-
   if (activeShift.value) {
-    // Currently on duty, show time until shift ends
     const diff = activeShift.value.end.getTime() - currentTime;
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `距離下班還有：${hours}h ${minutes}min`;
-  } else {
-    // Currently resting, find next shift
-    const nextShift = workIntervals.value.find(
-      (interval) => interval.start.getTime() > currentTime
-    );
-
-    if (!nextShift) {
-      return "沒有更多班表資訊";
-    }
-
-    const diff = nextShift.start.getTime() - currentTime;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-    return `離下次上班還有：${hours}h ${minutes}min`;
   }
+  const nextShift = workIntervals.value.find((i) => i.start.getTime() > currentTime);
+  if (!nextShift) return "沒有更多班表資訊";
+  const diff = nextShift.start.getTime() - currentTime;
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  return `離下次上班還有：${hours}h ${minutes}min`;
 });
 
 type Status = "WORK" | "REST" | "UNKNOWN";
 
-const displayDays = ref(5)
-const loadMore = () => {
-  displayDays.value += 5;
-}
+const displayDays = ref(5);
+const loadMore = () => { displayDays.value += 5; };
 
 const scheduleForDisplay = computed(() => {
   if (!scheduleData.value.length) return [];
 
   const today = new Date();
-
-  // If it's before 8 AM, we should consider "today" as the previous day for schedule purposes
-  if (now.value.getHours() < 8) {
-    today.setDate(today.getDate() - 1);
-  }
+  if (now.value.getHours() < 8) today.setDate(today.getDate() - 1);
 
   const result = [];
 
@@ -174,9 +131,9 @@ const scheduleForDisplay = computed(() => {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     const day = date.getDate();
-    const monthData = scheduleData.value.find(
-      (m) => m.year === year && m.month === month
-    );
+    const dow = date.getDay();
+
+    const monthData = scheduleData.value.find((m) => m.year === year && m.month === month);
     const shift = monthData?.shifts.find((s) => s.date === day);
     const shiftColor =
       shift == null
@@ -195,9 +152,7 @@ const scheduleForDisplay = computed(() => {
     const monthDataNextDay = scheduleData.value.find(
       (m) => m.year === nextDayYear && m.month === nextDayMonth
     );
-    const shiftNextDay = monthDataNextDay?.shifts.find(
-      (s) => s.date === nextDayDay
-    );
+    const shiftNextDay = monthDataNextDay?.shifts.find((s) => s.date === nextDayDay);
     const shiftColorNextDay =
       shiftNextDay == null
         ? (["UNKNOWN"] as const)
@@ -205,16 +160,12 @@ const scheduleForDisplay = computed(() => {
         ? (["WORK"] as const)
         : (["REST"] as const);
 
-    const shifts: [Status, Status, Status] = [
-      ...shiftColor,
-      ...shiftColorNextDay,
-    ];
+    const shifts: [Status, Status, Status] = [...shiftColor, ...shiftColorNextDay];
 
     result.push({
-      dateLabel: `${String(month).padStart(2, "0")}/${String(day).padStart(
-        2,
-        "0"
-      )}`,
+      dateLabel: `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`,
+      dayName: DAY_NAMES[dow],
+      isWeekend: dow === 0 || dow === 6,
       shifts,
     });
   }
@@ -223,25 +174,12 @@ const scheduleForDisplay = computed(() => {
 
 const timelineStyle = computed((): CSSProperties => {
   const now_ = now.value;
-
   const today8AM = new Date(now_);
   today8AM.setHours(8, 0, 0, 0);
-
-  // If current time is before 8 AM, the reference is yesterday's 8 AM
-  if (now_.getTime() < today8AM.getTime()) {
-    today8AM.setDate(today8AM.getDate() - 1);
-  }
-
+  if (now_.getTime() < today8AM.getTime()) today8AM.setDate(today8AM.getDate() - 1);
   const minutesSince8AM = (now_.getTime() - today8AM.getTime()) / (1000 * 60);
-  const totalMinutesInCycle = 24 * 60;
-  const percent = Math.max(
-    0,
-    Math.min(100, (minutesSince8AM / totalMinutesInCycle) * 100)
-  );
-
-  return {
-    left: `${percent}%`,
-  };
+  const percent = Math.max(0, Math.min(100, (minutesSince8AM / (24 * 60)) * 100));
+  return { left: `${percent}%` };
 });
 </script>
 
@@ -250,26 +188,37 @@ const timelineStyle = computed((): CSSProperties => {
     <h1 class="title">
       Panda <span style="white-space: nowrap">現在在上班嗎？</span>
     </h1>
-    <h2 class="status" :class="{ 'on-duty': currentStatus === '在上班' }">
+
+    <div class="status-badge" :class="{ 'on-duty': currentStatus === '在上班' }">
       {{ isLoading ? "讀取中..." : currentStatus }}
-    </h2>
+    </div>
+
     <p class="countdown">{{ isLoading ? "" : shiftTimeInfo }}</p>
 
     <div class="schedule-container">
+      <!-- Two-tier header: section labels on top, time marks below -->
+      <div class="section-axis">
+        <span class="section-today">今日</span>
+        <span class="section-d1">D+1</span>
+      </div>
       <div class="time-axis">
         <span class="time-mark start">08:00</span>
         <span class="time-mark mid-1">16:00</span>
         <span class="time-mark mid-2">24:00</span>
         <span class="time-mark end">08:00</span>
-        <span class="day-mark">D+1</span>
       </div>
+
       <div class="schedule-grid">
         <div
           v-for="(day, index) in scheduleForDisplay"
           :key="day.dateLabel"
           class="day-row"
+          :class="{ today: index === 0 }"
         >
-          <div class="date-label">{{ day.dateLabel }}</div>
+          <div class="date-label">
+            <span class="date-md">{{ day.dateLabel }}</span>
+            <span class="date-dow" :class="{ weekend: day.isWeekend }">{{ day.dayName }}</span>
+          </div>
           <div class="shifts">
             <div
               v-for="shiftType of day.shifts"
@@ -281,28 +230,35 @@ const timelineStyle = computed((): CSSProperties => {
                 unknown: shiftType === 'UNKNOWN',
               }"
             ></div>
-            <div
-              v-if="index === 0"
-              class="timeline-indicator"
-              :style="timelineStyle"
-            ></div>
+            <div v-if="index === 0" class="timeline-indicator" :style="timelineStyle"></div>
           </div>
         </div>
       </div>
     </div>
-    <button class="load-more" @click="loadMore">Load More</button>
+
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot work"></span>上班</span>
+      <span class="legend-item"><span class="legend-dot rest"></span>休息</span>
+      <span class="legend-item"><span class="legend-dot unknown"></span>未知</span>
+    </div>
+
+    <button class="load-more" @click="loadMore">載入更多</button>
   </div>
 </template>
 
 <style scoped>
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
+/* ── Animations ── */
+@keyframes pulse-line {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(255, 107, 107, 0.5); }
+  50% { opacity: 0.6; box-shadow: 0 0 10px rgba(255, 107, 107, 0.9); }
 }
 
+@keyframes breathing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.25); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 107, 107, 0); }
+}
+
+/* ── Layout ── */
 .container {
   max-width: 800px;
   margin: 0 auto;
@@ -317,43 +273,80 @@ const timelineStyle = computed((): CSSProperties => {
   margin-bottom: 1rem;
 }
 
-.status {
-  font-size: 2rem;
+/* ── Status badge ── */
+.status-badge {
+  display: inline-block;
+  font-size: 1.75rem;
   font-weight: bold;
-  margin-bottom: 0.5rem;
-  color: #50fa7b;
-  /* Green for rest */
+  padding: 0.35rem 1.75rem;
+  border-radius: 999px;
+  margin-bottom: 0.75rem;
+  background-color: rgba(61, 214, 140, 0.12);
+  color: #3dd68c;
+  border: 1px solid rgba(61, 214, 140, 0.35);
+  letter-spacing: 0.04em;
 }
 
-.status.on-duty {
-  color: #ff5555;
-  /* Red for on-duty */
+.status-badge.on-duty {
+  background-color: rgba(255, 107, 107, 0.12);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  animation: breathing 2.5s ease-in-out infinite;
 }
 
 .countdown {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   color: #8be9fd;
-  margin-bottom: 3rem;
+  margin-bottom: 2.5rem;
+  white-space: nowrap;
 }
 
+/* ── Schedule container ── */
 .schedule-container {
-  width: calc(100% + 50px);
+  --date-label-w: 50px;
+  width: calc(100% + var(--date-label-w));
+  margin-left: calc(-1 * var(--date-label-w));
   position: relative;
-  margin-left: -50px;
 }
 
+/* ── Two-tier header ── */
+.section-axis {
+  display: flex;
+  margin-left: calc(var(--date-label-w) + 1px);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: #6272a4;
+}
+
+.section-today {
+  flex: 2;
+  text-align: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #44475a;
+  border-right: 1px solid #44475a;
+}
+
+.section-d1 {
+  flex: 1;
+  text-align: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #44475a;
+  border-right: 1px solid #44475a;
+  color: #8be9fd;
+}
+
+/* ── Time axis ── */
 .time-axis {
   position: relative;
-  height: 1.5em;
-  margin-left: calc(50px + 1px);
-  /* date-label-width + date-label-border */
-  margin-bottom: 0.5rem;
+  height: 1.4em;
+  margin-left: calc(var(--date-label-w) + 1px);
+  margin-bottom: 0.35rem;
   color: #6272a4;
 }
 
 .time-axis span {
   position: absolute;
-  font-size: 0.9em;
+  font-size: 0.82em;
 }
 
 .time-axis .time-mark.start {
@@ -376,12 +369,7 @@ const timelineStyle = computed((): CSSProperties => {
   transform: translateX(-100%);
 }
 
-.time-axis .day-mark {
-  left: 83.333%;
-  transform: translateX(-50%);
-  color: #8be9fd;
-}
-
+/* ── Grid ── */
 .schedule-grid {
   position: relative;
   border-right: 1px solid #44475a;
@@ -391,15 +379,16 @@ const timelineStyle = computed((): CSSProperties => {
   content: "";
   position: absolute;
   top: 0;
-  left: calc(50px + 1px);
+  left: calc(var(--date-label-w) + 1px);
   right: 0;
   height: 1px;
   background-color: #44475a;
 }
 
+/* ── Day rows ── */
 .day-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   position: relative;
 }
 
@@ -407,64 +396,130 @@ const timelineStyle = computed((): CSSProperties => {
   content: "";
   position: absolute;
   bottom: 0;
-  left: calc(50px + 1px);
+  left: calc(var(--date-label-w) + 1px);
   right: 0;
   height: 1px;
   background-color: #44475a;
 }
 
+/* Today accent */
+.day-row.today::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #8be9fd;
+  border-radius: 0 2px 2px 0;
+  z-index: 1;
+}
+
+.day-row.today .date-md {
+  color: #f8f8f2;
+  font-weight: 600;
+}
+
+.day-row.today .date-dow {
+  color: #8be9fd;
+}
+
+/* ── Date label ── */
 .date-label {
-  width: 50px;
-  padding: 1rem 0;
-  text-align: center;
-  color: #6272a4;
+  width: var(--date-label-w);
+  padding: 0.6rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   border-right: 1px solid #44475a;
   flex-shrink: 0;
 }
 
+.date-md {
+  font-size: 0.8rem;
+  color: #6272a4;
+  line-height: 1;
+}
+
+.date-dow {
+  font-size: 0.68rem;
+  color: #4d5678;
+  line-height: 1;
+}
+
+.date-dow.weekend {
+  color: #ff79c6;
+}
+
+/* ── Shifts ── */
 .shifts {
   flex-grow: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   position: relative;
+  overflow: hidden;
+  min-height: 44px;
 }
 
 .shift-block {
-  height: 40px;
-  border-right: 1px solid #44475a;
+  border-right: 1px solid rgba(68, 71, 90, 0.5);
 }
 
 .shift-block:last-child {
   border-right: none;
 }
 
-.work {
-  background-color: #ffb86c;
-  /* Orange/Pink-ish */
-}
+.work  { background-color: #f4a261; }
+.rest  { background-color: #3dd68c; }
+.unknown { background-color: #2a2c3d; }
 
-.rest {
-  background-color: #50fa7b;
-  /* Green */
-}
-
-.unknown {
-  background-color: #6272a4;
-}
-
+/* ── Timeline indicator ── */
 .timeline-indicator {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
-  background-color: red;
+  background-color: #ff6b6b;
   transform: translateX(-50%);
   z-index: 10;
+  animation: pulse-line 2s ease-in-out infinite;
 }
 
+/* ── Legend ── */
+.legend {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: #6272a4;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legend-dot.work    { background-color: #f4a261; }
+.legend-dot.rest    { background-color: #3dd68c; }
+.legend-dot.unknown { background-color: #2a2c3d; border: 1px solid #44475a; }
+
+/* ── Load more button ── */
 .load-more {
-  margin: 1.5rem auto 0;
-  padding: 0.75rem 2.5rem;
+  margin: 0.25rem auto 0;
+  padding: 0.7rem 2.5rem;
   border: 1px solid #8be9fd;
   border-radius: 999px;
   background: transparent;
@@ -475,7 +530,6 @@ const timelineStyle = computed((): CSSProperties => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
 }
 
 .load-more:hover {
@@ -486,5 +540,61 @@ const timelineStyle = computed((): CSSProperties => {
 
 .load-more:active {
   transform: scale(0.98);
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  .container {
+    padding: 1.25rem 1rem;
+  }
+
+  .title {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .status-badge {
+    font-size: 1.35rem;
+    padding: 0.3rem 1.25rem;
+  }
+
+  .countdown {
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .schedule-container {
+    --date-label-w: 44px;
+  }
+
+  .section-axis {
+    font-size: 0.65rem;
+  }
+
+  .time-axis span {
+    font-size: 0.72em;
+  }
+
+  .date-md {
+    font-size: 0.72rem;
+  }
+
+  .date-dow {
+    font-size: 0.62rem;
+  }
+
+  .shifts {
+    min-height: 38px;
+  }
+
+  .load-more {
+    width: 100%;
+    font-size: 0.95rem;
+  }
+
+  .legend {
+    gap: 1rem;
+    font-size: 0.8rem;
+  }
 }
 </style>

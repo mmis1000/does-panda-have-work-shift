@@ -44,6 +44,11 @@ body {
   box-sizing: border-box;
 }
 
+/* Compact vertical padding on desktop screens ≤ 1080px tall */
+@media (max-height: 960px) and (min-width: 1600px) {
+  body { padding: 1rem 1rem; }
+}
+
 @media (min-width: 2560px) {
   body { padding: 4rem 2rem; }
 }

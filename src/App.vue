@@ -835,6 +835,57 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 /* ══════════════════════════════════════════
+   Compact height  ≤ 1080px tall (desktop)
+   Ensures legend + button fit without scroll
+══════════════════════════════════════════ */
+@media (max-height: 960px) and (min-width: 1600px) {
+  .container {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .header {
+    margin-bottom: 1rem;
+  }
+
+  .title {
+    gap: 0.1rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .title-zh {
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+  }
+
+  .title-en {
+    font-size: clamp(0.9rem, 2.5vw, 1.15rem);
+  }
+
+  .status-panel {
+    padding: 1rem 2rem;
+    gap: 0.15rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .status-zh {
+    font-size: clamp(1.8rem, 6vw, 2.8rem);
+  }
+
+  .status-en {
+    margin-bottom: 0.4rem;
+  }
+
+  .shifts {
+    min-height: 52px;
+  }
+
+  .legend {
+    margin-top: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* ══════════════════════════════════════════
    Screen reader only
 ══════════════════════════════════════════ */
 .sr-only {

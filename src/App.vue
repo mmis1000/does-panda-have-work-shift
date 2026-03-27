@@ -364,6 +364,22 @@ const timelineStyle = computed((): CSSProperties => {
     0 20px 80px rgba(0, 0, 0, 0.6);
 }
 
+@media (min-width: 2560px) {
+  .container {
+    --card-px: 3.5rem;
+    max-width: 1400px;
+    padding: 3.5rem var(--card-px);
+  }
+}
+
+@media (min-width: 3840px) {
+  .container {
+    --card-px: 5rem;
+    max-width: 2000px;
+    padding: 5rem var(--card-px);
+  }
+}
+
 /* Top-left corner tick */
 .container::before {
   content: "";
@@ -414,7 +430,7 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .title-en {
-  font-size: clamp(0.9rem, 3vw, 1.15rem);
+  font-size: clamp(1rem, 3vw, 1.4rem);
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -424,7 +440,7 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .title-zh {
-  font-size: clamp(1.6rem, 5vw, 2.6rem);
+  font-size: clamp(1.8rem, 5vw, 3rem);
   font-weight: 900;
   letter-spacing: 0.04em;
   color: var(--c-text-primary);
@@ -447,10 +463,10 @@ const timelineStyle = computed((): CSSProperties => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  padding: 1.5rem 2rem;
+  gap: 0.4rem;
+  padding: 1.75rem 2.5rem;
   margin: 0 auto 2rem;
-  max-width: 480px;
+  max-width: 600px;
   background: var(--c-bg-surface-2);
   border: 1px solid var(--c-neon-green);
   animation: status-glow-rest 3s ease-in-out infinite;
@@ -462,7 +478,7 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .status-glyph {
-  font-size: 1rem;
+  font-size: 1.25rem;
   color: var(--c-neon-green);
   line-height: 1;
   margin-bottom: 0.1rem;
@@ -473,7 +489,7 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .status-zh {
-  font-size: clamp(2rem, 8vw, 3rem);
+  font-size: clamp(2.5rem, 8vw, 3.5rem);
   font-weight: 900;
   letter-spacing: 0.08em;
   color: var(--c-neon-green);
@@ -487,7 +503,7 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .status-en {
-  font-size: 0.65rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -496,7 +512,7 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .countdown {
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-variant-numeric: tabular-nums;
   color: var(--c-neon-cyan);
   letter-spacing: 0.04em;
@@ -508,7 +524,7 @@ const timelineStyle = computed((): CSSProperties => {
    Schedule
 ══════════════════════════════════════════ */
 .schedule-container {
-  --date-label-w: 54px;
+  --date-label-w: 64px;
   position: relative;
   margin-left: calc(-1 * var(--card-px));
   width: calc(100% + 2 * var(--card-px));
@@ -522,7 +538,7 @@ const timelineStyle = computed((): CSSProperties => {
 /* Section axis — two-tier tab header, full width to match grid columns */
 .section-axis {
   display: flex;
-  font-size: 0.62rem;
+  font-size: 0.82rem;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -557,7 +573,7 @@ const timelineStyle = computed((): CSSProperties => {
 
 .time-axis span {
   position: absolute;
-  font-size: 0.72em;
+  font-size: 0.85em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -644,15 +660,15 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .date-md {
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: #a8a8cc;
+  color: #c8c8e8;
   line-height: 1;
 }
 
 .date-dow {
-  font-size: 0.62rem;
+  font-size: 0.78rem;
   color: var(--c-text-secondary);
   line-height: 1;
 }
@@ -667,7 +683,7 @@ const timelineStyle = computed((): CSSProperties => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   position: relative;
-  min-height: 52px;
+  min-height: 64px;
 }
 
 .shift-block {
@@ -726,7 +742,7 @@ const timelineStyle = computed((): CSSProperties => {
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 0.55rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   color: #ff1f4b;
@@ -744,9 +760,9 @@ const timelineStyle = computed((): CSSProperties => {
   gap: 1.5rem;
   justify-content: center;
   align-items: center;
-  margin-top: 0.75rem;
-  margin-bottom: 1.25rem;
-  font-size: 0.78rem;
+  margin-top: 0.9rem;
+  margin-bottom: 1.4rem;
+  font-size: 0.92rem;
   font-weight: 500;
   letter-spacing: 0.04em;
   color: var(--c-text-secondary);
@@ -759,8 +775,8 @@ const timelineStyle = computed((): CSSProperties => {
 }
 
 .legend-swatch {
-  width: 18px;
-  height: 10px;
+  width: 22px;
+  height: 14px;
   border-radius: 1px;
   flex-shrink: 0;
 }
@@ -795,11 +811,11 @@ const timelineStyle = computed((): CSSProperties => {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.7rem 2rem;
+  padding: 0.9rem 2.5rem;
   border: 1px solid rgba(0, 245, 255, 0.45);
   background: transparent;
   color: var(--c-neon-cyan);
-  font-size: 0.8rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -848,47 +864,47 @@ const timelineStyle = computed((): CSSProperties => {
   }
 
   .schedule-container {
-    --date-label-w: 50px;
+    --date-label-w: 58px;
   }
 
   .title-en {
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     letter-spacing: 0.14em;
   }
 
   .title-zh {
-    font-size: 1.6rem;
+    font-size: 1.8rem;
   }
 
   .status-panel {
-    padding: 1.1rem 1.25rem;
+    padding: 1.25rem 1.5rem;
     margin-bottom: 1.5rem;
   }
 
   .status-zh {
-    font-size: 2rem;
+    font-size: 2.5rem;
   }
 
   .section-axis {
-    font-size: 0.58rem;
+    font-size: 0.72rem;
   }
 
   .time-axis span {
-    font-size: 0.68em;
+    font-size: 0.75em;
   }
 
-  .date-md  { font-size: 0.68rem; }
-  .date-dow { font-size: 0.58rem; }
+  .date-md  { font-size: 0.8rem; }
+  .date-dow { font-size: 0.7rem; }
 
   .legend {
     gap: 1rem;
-    font-size: 0.74rem;
+    font-size: 0.85rem;
   }
 
   .load-more {
     width: 100%;
     justify-content: center;
-    font-size: 0.75rem;
+    font-size: 0.9rem;
   }
 
   .btn-en,

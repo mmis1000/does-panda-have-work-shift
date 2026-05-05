@@ -1,22 +1,19 @@
 :root {
-  /* Color tokens */
-  --c-bg-deepest:    #050508;
-  --c-bg-surface:    #0b0b18;
-  --c-bg-surface-2:  #11112a;
-  --c-border:        #1a1a38;
+  --c-bg-deepest: #050508;
+  --c-bg-surface: #0b0b18;
+  --c-bg-surface-2: #11112a;
+  --c-border: #1a1a38;
   --c-border-accent: #252550;
-  --c-neon-cyan:     #00f5ff;
-  --c-neon-magenta:  #ff00cc;
-  --c-neon-green:    #39ff14;
-  --c-neon-orange:   #ff7c00;
-  --c-neon-red:      #ff1f4b;
-  --c-text-primary:  #e8e8ff;
-  /* raised from #6a6a9a (~3.7:1) to #9898c8 (~7:1) for WCAG AA compliance */
-  --c-text-secondary:#9898c8;
-  --c-text-muted:    #5858a0;
+  --c-neon-cyan: #00f5ff;
+  --c-neon-magenta: #ff00cc;
+  --c-neon-green: #39ff14;
+  --c-neon-orange: #ff7c00;
+  --c-neon-red: #ff1f4b;
+  --c-text-primary: #e8e8ff;
+  --c-text-secondary: #b1b4dd;
+  --c-text-muted: #5858a0;
 
-  /* Fluid base font: 16px at ≤1024px, scales to 20px at 4K (3840px) */
-  font-size: clamp(16px, 0.5vw + 11px, 20px);
+  font-size: clamp(16px, 0.34vw + 13px, 20px);
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.6;
   font-weight: 400;
@@ -28,32 +25,35 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 4K explicit boost */
 @media (min-width: 3840px) {
-  :root { font-size: 24px; }
+  :root {
+    font-size: 22px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  background: radial-gradient(ellipse at 50% -10%, #0d0d30 0%, #06061a 55%, var(--c-bg-deepest) 100%);
+  background:
+    radial-gradient(circle at top, rgba(30, 40, 90, 0.26), transparent 38%),
+    radial-gradient(circle at 85% 20%, rgba(0, 245, 255, 0.08), transparent 22%),
+    linear-gradient(180deg, #070813 0%, #04050c 100%);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   min-height: 100vh;
-  padding: 2.5rem 1rem;
-  box-sizing: border-box;
+  padding: clamp(0.9rem, 2vw, 2rem);
 }
 
-/* Compact vertical padding on desktop screens ≤ 1080px tall */
-@media (max-height: 960px) and (min-width: 1600px) {
-  body { padding: 1rem 1rem; }
-}
-
-@media (min-width: 2560px) {
-  body { padding: 4rem 2rem; }
-}
-
-/* CRT scanline texture */
 body::after {
   content: "";
   position: fixed;
@@ -63,9 +63,9 @@ body::after {
   background: repeating-linear-gradient(
     0deg,
     transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.07) 2px,
-    rgba(0, 0, 0, 0.07) 4px
+    transparent 3px,
+    rgba(0, 0, 0, 0.035) 3px,
+    rgba(0, 0, 0, 0.035) 6px
   );
 }
 
@@ -78,29 +78,27 @@ button {
   font-family: inherit;
   background-color: transparent;
   cursor: pointer;
-  transition: none;
-  /* Minimum 44px touch target for elder-friendly interaction */
   min-height: 44px;
 }
 
 button:focus-visible {
   outline: 2px solid var(--c-neon-cyan);
   outline-offset: 4px;
-  box-shadow: 0 0 0 6px rgba(0, 245, 255, 0.15);
+  box-shadow: 0 0 0 6px rgba(0, 245, 255, 0.12);
 }
 
 #app {
   width: 100%;
-  max-width: 1280px;
+  max-width: 100%;
   margin: 0 auto;
   text-align: center;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
-@media (min-width: 2560px) {
-  #app { max-width: 2000px; }
-}
-
-@media (min-width: 3840px) {
-  #app { max-width: 2800px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

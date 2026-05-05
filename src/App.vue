@@ -18,52 +18,90 @@ interface WorkInterval {
 }
 
 const SHIFT_TYPES = {
-  MORNING: 1, // 早班 (0800-1600)
-  EVENING: 2, // 晚班 (1600-2400)
-  NIGHT: 3,   // 大夜 (2400-0800)
+  MORNING: 1,
+  EVENING: 2,
+  NIGHT: 3,
 } as const;
 
 const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"] as const;
-
-const SHIFT_SLOT_LABELS = ["08:00–16:00", "16:00–24:00", "24:00–08:00 (D+1)"] as const;
+const SHIFT_SLOT_LABELS = ["08:00–16:00", "16:00–24:00", "24:00–08:00"] as const;
 
 const scheduleData = ref<MonthSchedule[]>([]);
 const workIntervals = ref<WorkInterval[]>([]);
 const now = ref(new Date());
 const isLoading = ref(true);
+const displayDays = ref(5);
 
 function processShifts(data: MonthSchedule[]) {
   const intervals: WorkInterval[] = [];
   data.forEach((monthData) => {
     monthData.shifts.forEach((shift) => {
-      if (typeof shift.value === "number") {
-        const year = monthData.year;
-        const month = monthData.month - 1;
-        const day = shift.date;
-        let start: Date, end: Date;
+      if (typeof shift.value !== "number") return;
 
-        if (shift.value === SHIFT_TYPES.MORNING) {
-          start = new Date(year, month, day, 8, 0, 0);
-          end   = new Date(year, month, day, 16, 0, 0);
-        } else if (shift.value === SHIFT_TYPES.EVENING) {
-          const nextDay = new Date(year, month, day);
-          nextDay.setDate(nextDay.getDate() + 1);
-          start = new Date(year, month, day, 16, 0, 0);
-          end   = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), 0, 0, 0);
-        } else if (shift.value === SHIFT_TYPES.NIGHT) {
-          start = new Date(year, month, day, 0, 0, 0);
-          end   = new Date(year, month, day, 8, 0, 0);
-        } else {
-          return;
-        }
-        intervals.push({ start, end });
+      const year = monthData.year;
+      const month = monthData.month - 1;
+      const day = shift.date;
+      let start: Date;
+      let end: Date;
+
+      if (shift.value === SHIFT_TYPES.MORNING) {
+        start = new Date(year, month, day, 8, 0, 0);
+        end = new Date(year, month, day, 16, 0, 0);
+      } else if (shift.value === SHIFT_TYPES.EVENING) {
+        const nextDay = new Date(year, month, day);
+        nextDay.setDate(nextDay.getDate() + 1);
+        start = new Date(year, month, day, 16, 0, 0);
+        end = new Date(
+          nextDay.getFullYear(),
+          nextDay.getMonth(),
+          nextDay.getDate(),
+          0,
+          0,
+          0
+        );
+      } else if (shift.value === SHIFT_TYPES.NIGHT) {
+        start = new Date(year, month, day, 0, 0, 0);
+        end = new Date(year, month, day, 8, 0, 0);
+      } else {
+        return;
       }
+
+      intervals.push({ start, end });
     });
   });
+
   return intervals.sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
+function getDisplayDaysForWidth(width: number) {
+  if (width >= 2400) return 10;
+  if (width >= 1600) return 8;
+  if (width >= 1024) return 7;
+  if (width >= 640) return 5;
+  return 4;
+}
+
+function updateDisplayDaysForViewport() {
+  if (typeof window === "undefined") return;
+  displayDays.value = getDisplayDaysForWidth(window.innerWidth);
+}
+
+function formatAbsoluteDate(date: Date) {
+  return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")} ${String(
+    date.getHours()
+  ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatTime(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
 onMounted(async () => {
+  updateDisplayDaysForViewport();
+  if (typeof window !== "undefined") {
+    window.addEventListener("resize", updateDisplayDaysForViewport);
+  }
+
   try {
     const response = await fetch(import.meta.env.BASE + "data/panda.json");
     if (!response.ok) throw new Error("Network response was not ok");
@@ -76,11 +114,16 @@ onMounted(async () => {
     isLoading.value = false;
   }
 
-  setInterval(() => { now.value = new Date(); }, 1000);
+  setInterval(() => {
+    now.value = new Date();
+  }, 1000);
 
   setInterval(() => {
     fetch(import.meta.env.BASE + "data/panda.json")
-      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((data) => {
         scheduleData.value = data;
         workIntervals.value = processShifts(data);
@@ -91,43 +134,74 @@ onMounted(async () => {
 
 const activeShift = computed(() =>
   workIntervals.value.find(
-    (i) => now.value.getTime() >= i.start.getTime() && now.value.getTime() < i.end.getTime()
+    (interval) =>
+      now.value.getTime() >= interval.start.getTime() &&
+      now.value.getTime() < interval.end.getTime()
   )
 );
 
-const currentStatus = computed(() => (activeShift.value ? "在上班" : "在休息"));
+const nextShift = computed(() =>
+  workIntervals.value.find((interval) => interval.start.getTime() > now.value.getTime())
+);
 
-const currentStatusEn = computed(() => {
-  if (isLoading.value) return "CONNECTING...";
-  return activeShift.value ? "ON DUTY" : "OFF DUTY";
+const currentStatus = computed(() => (activeShift.value ? "在上班" : "在休息"));
+const currentStatusBadge = computed(() => {
+  if (isLoading.value) return "同步中";
+  return activeShift.value ? "上班中" : "休息中";
+});
+const availabilityStatus = computed(() => {
+  if (isLoading.value) return "判斷中...";
+  return activeShift.value ? "暫時忙碌" : "可聯絡";
 });
 
 const shiftTimeInfo = computed(() => {
-  const currentTime = now.value.getTime();
   if (activeShift.value) {
-    const diff = activeShift.value.end.getTime() - currentTime;
-    const hours   = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `距離下班還有：${hours}h ${minutes}min`;
+    return `預計 ${formatTime(activeShift.value.end)} 後較方便`;
   }
-  const nextShift = workIntervals.value.find((i) => i.start.getTime() > currentTime);
-  if (!nextShift) return "沒有更多班表資訊";
-  const diff = nextShift.start.getTime() - currentTime;
-  const hours   = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  return `離下次上班還有：${hours}h ${minutes}min`;
+
+  if (!nextShift.value) return "目前沒有後續班表";
+
+  return `可聯絡到 ${formatTime(nextShift.value.start)}`;
+});
+
+const nextShiftDetail = computed(() => {
+  if (activeShift.value) {
+    return `目前：${currentStatus.value}｜${formatAbsoluteDate(activeShift.value.end)} 下班`;
+  }
+  if (nextShift.value) {
+    return `目前：${currentStatus.value}｜${formatAbsoluteDate(nextShift.value.start)} 開始上班`;
+  }
+  return `目前：${currentStatus.value}`;
+});
+
+const currentTimeLabel = computed(() => formatTime(now.value));
+
+const nextChangeLabel = computed(() => {
+  if (activeShift.value) {
+    return `${formatTime(activeShift.value.end)} 下班`;
+  }
+  if (nextShift.value) {
+    return `${formatTime(nextShift.value.start)} 上班`;
+  }
+  return "暫無後續資料";
 });
 
 type Status = "WORK" | "REST" | "UNKNOWN";
 
 function shiftLabel(shiftType: Status, slotIndex: number): string {
-  const time   = SHIFT_SLOT_LABELS[slotIndex] ?? "";
-  const status = shiftType === "WORK" ? "上班中" : shiftType === "REST" ? "休息中" : "未知";
+  const time = SHIFT_SLOT_LABELS[slotIndex] ?? "";
+  const status =
+    shiftType === "WORK" ? "上班中" : shiftType === "REST" ? "休息中" : "未知";
   return `${time} ${status}`;
 }
 
-const displayDays = ref(5);
-const loadMore = () => { displayDays.value += 5; };
+function shiftBadgeText(shiftType: Status) {
+  return shiftType === "WORK" ? "上班" : shiftType === "REST" ? "休息" : "未知";
+}
+
+const loadMore = () => {
+  displayDays.value += 3;
+};
 
 const scheduleForDisplay = computed(() => {
   if (!scheduleData.value.length) return [];
@@ -140,10 +214,10 @@ const scheduleForDisplay = computed(() => {
   for (let i = 0; i < displayDays.value; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
-    const year  = date.getFullYear();
+    const year = date.getFullYear();
     const month = date.getMonth() + 1;
-    const day   = date.getDate();
-    const dow   = date.getDay();
+    const day = date.getDate();
+    const dow = date.getDay();
 
     const monthData = scheduleData.value.find((m) => m.year === year && m.month === month);
     const shift = monthData?.shifts.find((s) => s.date === day);
@@ -151,24 +225,24 @@ const scheduleForDisplay = computed(() => {
       shift == null
         ? (["UNKNOWN", "UNKNOWN"] as const)
         : shift.value === SHIFT_TYPES.MORNING
-        ? (["WORK", "REST"] as const)
-        : shift.value === SHIFT_TYPES.EVENING
-        ? (["REST", "WORK"] as const)
-        : (["REST", "REST"] as const);
+          ? (["WORK", "REST"] as const)
+          : shift.value === SHIFT_TYPES.EVENING
+            ? (["REST", "WORK"] as const)
+            : (["REST", "REST"] as const);
 
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
-    const ndy   = nextDay.getFullYear();
-    const ndm   = nextDay.getMonth() + 1;
-    const ndd   = nextDay.getDate();
+    const ndy = nextDay.getFullYear();
+    const ndm = nextDay.getMonth() + 1;
+    const ndd = nextDay.getDate();
     const ndData = scheduleData.value.find((m) => m.year === ndy && m.month === ndm);
     const ndShift = ndData?.shifts.find((s) => s.date === ndd);
     const shiftColorNextDay =
       ndShift == null
         ? (["UNKNOWN"] as const)
         : ndShift.value === SHIFT_TYPES.NIGHT
-        ? (["WORK"] as const)
-        : (["REST"] as const);
+          ? (["WORK"] as const)
+          : (["REST"] as const);
 
     const shifts: [Status, Status, Status] = [...shiftColor, ...shiftColorNextDay];
 
@@ -179,15 +253,22 @@ const scheduleForDisplay = computed(() => {
       shifts,
     });
   }
+
   return result;
 });
 
+const hasUnknownVisible = computed(() =>
+  scheduleForDisplay.value.some((day) => day.shifts.includes("UNKNOWN"))
+);
+
 const timelineStyle = computed((): CSSProperties => {
-  const now_ = now.value;
-  const today8AM = new Date(now_);
+  const current = now.value;
+  const today8AM = new Date(current);
   today8AM.setHours(8, 0, 0, 0);
-  if (now_.getTime() < today8AM.getTime()) today8AM.setDate(today8AM.getDate() - 1);
-  const minutesSince8AM = (now_.getTime() - today8AM.getTime()) / (1000 * 60);
+  if (current.getTime() < today8AM.getTime()) {
+    today8AM.setDate(today8AM.getDate() - 1);
+  }
+  const minutesSince8AM = (current.getTime() - today8AM.getTime()) / (1000 * 60);
   const percent = Math.max(0, Math.min(100, (minutesSince8AM / (24 * 60)) * 100));
   return { left: `${percent}%` };
 });
@@ -195,699 +276,614 @@ const timelineStyle = computed((): CSSProperties => {
 
 <template>
   <div class="container">
-
-    <!-- ── Header ── -->
     <header class="header">
-      <h1 class="title">
-        <span class="title-prefix" aria-hidden="true">⬡</span>
-        <span class="title-en">PANDA STATUS TRACKER</span>
-        <span class="title-zh">現在在上班嗎？</span>
-      </h1>
-      <hr class="section-rule" aria-hidden="true" />
+      <div class="eyebrow">PANDA STATUS TRACKER</div>
+      <h1 class="title">現在在上班嗎？</h1>
     </header>
 
-    <!-- ── Status Panel ── -->
-    <div
+    <section
       class="status-panel"
       :class="{ 'on-duty': currentStatus === '在上班' }"
       role="status"
       :aria-label="`目前狀態：${isLoading ? '讀取中' : currentStatus}`"
     >
-      <div class="status-glyph" aria-hidden="true">●</div>
-      <div class="status-zh">{{ isLoading ? "讀取中..." : currentStatus }}</div>
-      <div class="status-en" aria-hidden="true">{{ currentStatusEn }}</div>
-      <p class="countdown" aria-live="off">{{ isLoading ? "\u00a0" : shiftTimeInfo }}</p>
-    </div>
-
-    <!-- ── Schedule ── -->
-    <section class="schedule-container" role="region" aria-label="Panda 的班表時間表">
-
-      <div class="section-axis" aria-hidden="true">
-        <span class="section-today">今日</span>
-        <span class="section-d1">D+1</span>
-      </div>
-
-      <div class="time-axis" aria-hidden="true">
-        <span class="time-mark start">08:00</span>
-        <span class="time-mark mid-1">16:00</span>
-        <span class="time-mark mid-2">24:00</span>
-        <span class="time-mark end">08:00</span>
-      </div>
-
-      <div class="schedule-grid" role="grid">
-        <div
-          v-for="(day, index) in scheduleForDisplay"
-          :key="day.dateLabel"
-          class="day-row"
-          :class="{ today: index === 0 }"
-          :style="{ '--row-index': index }"
-          role="row"
-          :aria-label="`${day.dateLabel} 星期${day.dayName}`"
-        >
-          <div class="date-label" role="rowheader">
-            <span class="date-md">{{ day.dateLabel }}</span>
-            <span class="date-dow" :class="{ weekend: day.isWeekend }">{{ day.dayName }}</span>
+      <div class="status-main">
+        <div class="status-copy">
+          <div class="status-pill">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>{{ currentStatusBadge }}</span>
           </div>
+          <div class="status-zh">{{ isLoading ? "讀取中..." : availabilityStatus }}</div>
+          <p class="countdown" aria-live="off">{{ isLoading ? "資料讀取中" : shiftTimeInfo }}</p>
+          <p class="next-shift-detail">{{ isLoading ? "正在取得班表資料" : nextShiftDetail }}</p>
+        </div>
 
-          <div class="shifts">
-            <div
-              v-for="(shiftType, shiftIndex) of day.shifts"
-              :key="shiftIndex"
-              class="shift-block"
-              :class="{
-                work:    shiftType === 'WORK',
-                rest:    shiftType === 'REST',
-                unknown: shiftType === 'UNKNOWN',
-              }"
-              role="gridcell"
-            >
-              <span class="sr-only">{{ shiftLabel(shiftType, shiftIndex) }}</span>
-            </div>
-
-            <div
-              v-if="index === 0"
-              class="timeline-indicator"
-              :style="timelineStyle"
-              aria-hidden="true"
-            >
-              <span class="now-label">NOW</span>
-            </div>
+        <div class="status-metrics" aria-label="輔助資訊">
+          <div class="metric-card">
+            <span class="metric-label">目前時間</span>
+            <strong class="metric-value">{{ currentTimeLabel }}</strong>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">下一次變化</span>
+            <strong class="metric-value">{{ nextChangeLabel }}</strong>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ── Legend ── -->
-    <div class="legend" aria-label="圖例">
-      <span class="legend-item">
-        <span class="legend-swatch work" aria-hidden="true"></span>上班
-      </span>
-      <span class="legend-item">
-        <span class="legend-swatch rest" aria-hidden="true"></span>休息
-      </span>
-      <span class="legend-item">
-        <span class="legend-swatch unknown" aria-hidden="true"></span>未知
-      </span>
-    </div>
+    <section class="schedule-shell" aria-labelledby="schedule-heading">
+      <div class="schedule-head">
+        <div>
+          <p class="section-kicker">近期待班</p>
+          <h2 id="schedule-heading">近期班表</h2>
+        </div>
 
-    <!-- ── Load More ── -->
-    <button class="load-more" @click="loadMore" aria-label="載入更多班表資料">
-      <span class="btn-en" aria-hidden="true">▼ LOAD MORE</span>
-      <span class="btn-sep" aria-hidden="true"> / </span>
-      <span class="btn-zh">載入更多</span>
-    </button>
+        <div class="legend" aria-label="圖例">
+          <span class="legend-item">
+            <span class="legend-swatch work" aria-hidden="true"></span>
+            <span>上班</span>
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch rest" aria-hidden="true"></span>
+            <span>休息</span>
+          </span>
+          <span v-if="hasUnknownVisible" class="legend-item">
+            <span class="legend-swatch unknown" aria-hidden="true"></span>
+            <span>未知</span>
+          </span>
+        </div>
+      </div>
 
+      <section class="schedule-container" role="region" aria-label="Panda 的班表時間表">
+        <div class="section-axis" aria-hidden="true">
+          <span class="section-today">今日</span>
+          <span class="section-d1">次日</span>
+        </div>
+
+        <div class="time-axis" aria-hidden="true">
+          <span class="time-mark start">08:00</span>
+          <span class="time-mark mid-1">16:00</span>
+          <span class="time-mark mid-2">24:00</span>
+          <span class="time-mark end">08:00</span>
+        </div>
+
+        <div class="schedule-grid" role="grid">
+          <div
+            v-for="(day, index) in scheduleForDisplay"
+            :key="day.dateLabel"
+            class="day-row"
+            :class="{ today: index === 0 }"
+            :style="{ '--row-index': index }"
+            role="row"
+            :aria-label="`${day.dateLabel} 星期${day.dayName}`"
+          >
+            <div class="date-label" role="rowheader">
+              <span class="date-md">{{ day.dateLabel }}</span>
+              <span class="date-dow" :class="{ weekend: day.isWeekend }">{{ day.dayName }}</span>
+            </div>
+
+            <div class="shifts">
+              <div
+                v-for="(shiftType, shiftIndex) of day.shifts"
+                :key="shiftIndex"
+                class="shift-block"
+                :class="{
+                  work: shiftType === 'WORK',
+                  rest: shiftType === 'REST',
+                  unknown: shiftType === 'UNKNOWN',
+                }"
+                role="gridcell"
+              >
+                <span class="shift-badge" aria-hidden="true">{{ shiftBadgeText(shiftType) }}</span>
+                <span class="sr-only">{{ shiftLabel(shiftType, shiftIndex) }}</span>
+              </div>
+
+              <div
+                v-if="index === 0"
+                class="timeline-indicator"
+                :style="timelineStyle"
+                aria-hidden="true"
+              >
+                <span class="now-label">NOW</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="schedule-footer">
+        <p class="footer-note">需要更長的歷史區間時，可繼續展開更多天數。</p>
+        <button class="load-more" @click="loadMore" aria-label="載入更多班表資料">
+          <span class="btn-zh">再看 3 天</span>
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-/* ══════════════════════════════════════════
-   Keyframes
-══════════════════════════════════════════ */
-@keyframes neon-flicker {
-  0%   { opacity: 0; }
-  10%  { opacity: 0.9; }
-  14%  { opacity: 0.2; }
-  18%  { opacity: 1; }
-  22%  { opacity: 0.5; }
-  26%  { opacity: 1; }
-  100% { opacity: 1; }
+@keyframes breathe-soft {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(0, 245, 255, 0.08), 0 14px 40px rgba(0, 0, 0, 0.32);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(0, 245, 255, 0.18), 0 18px 48px rgba(0, 0, 0, 0.38);
+  }
 }
 
 @keyframes pulse-line {
-  0%, 100% { opacity: 1;   box-shadow: 0 0 6px #ff1f4b, 0 0 18px rgba(255,31,75,0.5); }
-  50%       { opacity: 0.7; box-shadow: 0 0 12px #ff1f4b, 0 0 32px rgba(255,31,75,0.8); }
+  0%, 100% {
+    opacity: 0.95;
+    box-shadow: 0 0 10px rgba(255, 31, 75, 0.38);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 18px rgba(255, 31, 75, 0.58);
+  }
 }
 
-@keyframes now-bounce {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50%       { transform: translateX(-50%) translateY(-3px); }
-}
-
-@keyframes status-glow-rest {
-  0%, 100% { box-shadow: 0 0 0 1px var(--c-neon-green), 0 0 10px rgba(57,255,20,0.12); }
-  50%       { box-shadow: 0 0 0 1px var(--c-neon-green), 0 0 18px rgba(57,255,20,0.22); }
-}
-
-@keyframes status-glow-work {
-  0%, 100% { box-shadow: 0 0 0 1px var(--c-neon-orange), 0 0 10px rgba(255,124,0,0.15); }
-  50%       { box-shadow: 0 0 0 1px var(--c-neon-orange), 0 0 20px rgba(255,124,0,0.28); }
-}
-
-@keyframes slide-in {
-  from { opacity: 0; transform: translateX(-6px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes corner-spark {
-  0%   { opacity: 0; }
-  50%  { opacity: 1; }
-  70%  { opacity: 0.5; }
-  100% { opacity: 1; }
-}
-
-/* ══════════════════════════════════════════
-   Container
-══════════════════════════════════════════ */
 .container {
-  --card-px: 2rem;
+  --panel-px: clamp(1rem, 2vw, 2.25rem);
   position: relative;
-  max-width: 780px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 2.5rem var(--card-px);
-  text-align: center;
-  background: var(--c-bg-surface);
-  border: 1px solid var(--c-border-accent);
+  padding: clamp(1.25rem, 2vw, 2rem) var(--panel-px) clamp(1.5rem, 2vw, 2.25rem);
+  background: linear-gradient(180deg, rgba(17, 17, 42, 0.96), rgba(9, 9, 22, 0.98));
+  border: 1px solid rgba(76, 100, 168, 0.38);
+  border-radius: 24px;
   box-shadow:
     0 0 0 1px rgba(0, 245, 255, 0.06) inset,
-    0 0 60px rgba(0, 245, 255, 0.04),
-    0 20px 80px rgba(0, 0, 0, 0.6);
+    0 24px 90px rgba(0, 0, 0, 0.5);
 }
 
-@media (min-width: 2560px) {
-  .container {
-    --card-px: 3.5rem;
-    max-width: 1400px;
-    padding: 3.5rem var(--card-px);
-  }
-}
-
-@media (min-width: 3840px) {
-  .container {
-    --card-px: 5rem;
-    max-width: 2000px;
-    padding: 5rem var(--card-px);
-  }
-}
-
-/* Top-left corner tick */
-.container::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  width: 22px;
-  height: 22px;
-  border-top: 2px solid var(--c-neon-cyan);
-  border-left: 2px solid var(--c-neon-cyan);
-  animation: corner-spark 0.9s ease both;
-}
-
-/* Top-right corner tick */
+.container::before,
 .container::after {
   content: "";
   position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 22px;
-  height: 22px;
-  border-top: 2px solid var(--c-neon-cyan);
-  border-right: 2px solid var(--c-neon-cyan);
-  animation: corner-spark 0.9s ease both 0.1s;
+  top: 14px;
+  width: 28px;
+  height: 28px;
+  border-top: 2px solid rgba(0, 245, 255, 0.75);
 }
 
-/* ══════════════════════════════════════════
-   Header
-══════════════════════════════════════════ */
+.container::before {
+  left: 14px;
+  border-left: 2px solid rgba(0, 245, 255, 0.75);
+}
+
+.container::after {
+  right: 14px;
+  border-right: 2px solid rgba(0, 245, 255, 0.75);
+}
+
 .header {
-  margin-bottom: 2rem;
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+  text-align: left;
+}
+
+.eyebrow {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-text-secondary);
 }
 
 .title {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  margin: 0 0 1.25rem;
-}
-
-.title-prefix {
-  font-size: 1.5rem;
-  color: var(--c-neon-cyan);
-  text-shadow: 0 0 8px rgba(0,245,255,0.35);
-  line-height: 1;
-  animation: neon-flicker 1.2s ease both;
-}
-
-.title-en {
-  font-size: clamp(1rem, 3vw, 1.4rem);
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--c-neon-cyan);
-  text-shadow: 0 0 8px rgba(0,245,255,0.25);
-  animation: neon-flicker 1.2s ease both 0.1s;
-}
-
-.title-zh {
-  font-size: clamp(1.8rem, 5vw, 3rem);
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  color: var(--c-text-primary);
-  text-shadow: none;
-  animation: neon-flicker 1.2s ease both 0.25s;
-}
-
-.section-rule {
-  border: none;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--c-neon-cyan), transparent);
-  opacity: 0.4;
   margin: 0;
+  font-size: clamp(1.8rem, 3.6vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: 0.01em;
+  color: var(--c-text-primary);
 }
 
-/* ══════════════════════════════════════════
-   Status Panel
-══════════════════════════════════════════ */
+.subtitle {
+  margin: 0;
+  max-width: 42rem;
+  color: var(--c-text-secondary);
+  font-size: 0.98rem;
+}
+
 .status-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 1.75rem 2.5rem;
-  margin: 0 auto 2rem;
-  max-width: 600px;
-  background: var(--c-bg-surface-2);
-  border: 1px solid var(--c-neon-green);
-  animation: status-glow-rest 3s ease-in-out infinite;
+  margin-bottom: 0.95rem;
+  padding: clamp(0.85rem, 1.6vw, 1.15rem);
+  border: 1px solid rgba(57, 255, 20, 0.28);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(57, 255, 20, 0.05), rgba(0, 245, 255, 0.025)),
+    rgba(15, 16, 36, 0.92);
 }
 
 .status-panel.on-duty {
-  border-color: var(--c-neon-orange);
-  animation: status-glow-work 2.5s ease-in-out infinite;
+  border-color: rgba(255, 124, 0, 0.34);
+  background:
+    linear-gradient(135deg, rgba(255, 124, 0, 0.06), rgba(0, 245, 255, 0.025)),
+    rgba(15, 16, 36, 0.92);
 }
 
-.status-glyph {
-  font-size: 1.25rem;
-  color: var(--c-neon-green);
-  line-height: 1;
-  margin-bottom: 0.1rem;
+.status-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.95fr);
+  gap: 0.8rem;
+  align-items: stretch;
 }
 
-.status-panel.on-duty .status-glyph {
-  color: var(--c-neon-orange);
+.status-copy {
+  display: grid;
+  gap: 0.3rem;
+  align-content: center;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: fit-content;
+  min-height: 32px;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--c-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--c-neon-green);
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.65);
+}
+
+.status-panel.on-duty .status-dot {
+  background: var(--c-neon-orange);
+  box-shadow: 0 0 12px rgba(255, 124, 0, 0.65);
 }
 
 .status-zh {
-  font-size: clamp(2.5rem, 8vw, 3.5rem);
+  font-size: clamp(2.05rem, 4.9vw, 3.4rem);
   font-weight: 900;
-  letter-spacing: 0.08em;
-  color: var(--c-neon-green);
-  text-shadow: 0 0 12px rgba(57,255,20,0.2);
   line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--c-neon-green);
 }
 
 .status-panel.on-duty .status-zh {
   color: var(--c-neon-orange);
-  text-shadow: 0 0 12px rgba(255,124,0,0.2);
-}
-
-.status-en {
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--c-text-secondary);
-  margin-bottom: 0.75rem;
 }
 
 .countdown {
-  font-size: 1.15rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--c-neon-cyan);
-  letter-spacing: 0.04em;
   margin: 0;
-  white-space: nowrap;
+  font-size: clamp(0.98rem, 1.55vw, 1.16rem);
+  font-weight: 700;
+  color: var(--c-text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
-/* ══════════════════════════════════════════
-   Schedule
-══════════════════════════════════════════ */
-.schedule-container {
-  --date-label-w: 64px;
-  position: relative;
-  margin-left: calc(-1 * var(--card-px));
-  width: calc(100% + 2 * var(--card-px));
-  border-top: 1px solid var(--c-border-accent);
-  border-bottom: 1px solid var(--c-border-accent);
-  background: var(--c-bg-deepest);
-  overflow: hidden;
-  margin-bottom: 0;
+.next-shift-detail {
+  margin: 0;
+  color: var(--c-text-secondary);
+  font-size: 0.92rem;
 }
 
-/* Section axis — two-tier tab header, full width to match grid columns */
-.section-axis {
+.status-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  align-self: center;
+}
+
+.metric-card {
   display: flex;
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.62rem 0.75rem;
+  border-radius: 16px;
+  background: rgba(4, 8, 20, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.metric-label {
+  color: var(--c-text-secondary);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.section-today {
-  flex: 2;
-  padding: 5px 0 4px;
-  text-align: center;
-  border-top: 2px solid var(--c-neon-cyan);
-  border-right: 1px solid var(--c-border-accent);
+.metric-value {
+  color: var(--c-text-primary);
+  font-size: clamp(0.95rem, 1.15vw, 1.08rem);
+  line-height: 1.15;
+}
+
+.schedule-shell {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.schedule-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.section-kicker {
+  margin: 0 0 0.15rem;
   color: var(--c-neon-cyan);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.schedule-head h2 {
+  margin: 0;
+  font-size: clamp(1.28rem, 1.8vw, 1.75rem);
+  color: var(--c-text-primary);
+}
+
+.schedule-container {
+  --date-label-w: 88px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(76, 100, 168, 0.34);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(6, 9, 22, 0.96), rgba(6, 6, 14, 0.98));
+}
+
+.section-axis {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.section-today,
+.section-d1 {
+  padding: 0.7rem 1rem;
+  text-align: center;
+}
+
+.section-today {
+  color: var(--c-neon-cyan);
+  background: rgba(0, 245, 255, 0.06);
+  border-bottom: 1px solid rgba(0, 245, 255, 0.2);
 }
 
 .section-d1 {
-  flex: 1;
-  padding: 5px 0 4px;
-  text-align: center;
-  border-top: 2px solid var(--c-neon-magenta);
-  border-right: 1px solid var(--c-border-accent);
-  color: var(--c-neon-magenta);
+  color: #ff7bd8;
+  background: rgba(255, 0, 204, 0.06);
+  border-left: 1px solid rgba(76, 100, 168, 0.34);
+  border-bottom: 1px solid rgba(255, 0, 204, 0.18);
 }
 
-/* Time axis — full width to match grid columns */
 .time-axis {
   position: relative;
-  height: 1.4em;
-  padding-top: 2px;
-  border-bottom: 1px solid var(--c-border-accent);
+  height: 2.4rem;
+  border-bottom: 1px solid rgba(76, 100, 168, 0.3);
   color: var(--c-text-secondary);
 }
 
 .time-axis span {
   position: absolute;
-  font-size: 0.85em;
+  top: 0.7rem;
+  font-size: 0.92rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.time-axis .time-mark.start  { left: 0%;   transform: translateX(0); }
-.time-axis .time-mark.mid-1  { left: 33.333%; transform: translateX(-50%); }
-.time-axis .time-mark.mid-2  { left: 66.666%; transform: translateX(-50%); }
-.time-axis .time-mark.end    { left: 100%; transform: translateX(-100%); }
+.time-axis .time-mark.start { left: 1rem; }
+.time-axis .time-mark.mid-1 { left: 33.333%; transform: translateX(-50%); }
+.time-axis .time-mark.mid-2 { left: 66.666%; transform: translateX(-50%); }
+.time-axis .time-mark.end { right: 1rem; }
 
-/* Grid */
 .schedule-grid {
   position: relative;
 }
 
-.schedule-grid::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-/* Day rows */
 .day-row {
-  display: flex;
-  align-items: stretch;
   position: relative;
-  animation: slide-in 0.28s ease both;
-  animation-delay: calc(var(--row-index, 0) * 45ms);
+  display: flex;
+  min-height: 88px;
+  border-bottom: 1px solid rgba(76, 100, 168, 0.22);
 }
 
-.day-row::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: rgba(0, 0, 0, 0.35);
+.day-row:last-child {
+  border-bottom: none;
 }
 
-.day-row:hover {
-  background: rgba(0, 245, 255, 0.025);
+.day-row.today {
+  background: linear-gradient(90deg, rgba(0, 245, 255, 0.06), transparent 18%);
 }
 
-/* Today accent stripe */
-.day-row.today::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--c-neon-cyan);
-  box-shadow: 0 0 8px var(--c-neon-cyan);
-  z-index: 10;
-}
-
-.day-row.today .date-md {
-  color: #ffffff;
-  font-weight: 700;
-}
-
-.day-row.today .date-dow {
-  color: var(--c-neon-cyan);
-}
-
-/* Date label — absolute overlay on the left of each row */
 .date-label {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
+  z-index: 2;
   width: var(--date-label-w);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  background: rgba(5, 5, 18, 0.72);
-  border-right: 1px solid rgba(0, 245, 255, 0.35);
+  display: grid;
+  place-content: center;
+  gap: 0.28rem;
+  background: rgba(5, 8, 18, 0.88);
+  border-right: 1px solid rgba(0, 245, 255, 0.18);
 }
 
 .date-md {
-  font-size: 0.88rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: #c8c8e8;
+  font-size: 0.98rem;
+  font-weight: 700;
   line-height: 1;
+  color: var(--c-text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .date-dow {
-  font-size: 0.78rem;
-  color: var(--c-text-secondary);
+  font-size: 0.84rem;
   line-height: 1;
+  color: #a9acd8;
 }
 
 .date-dow.weekend {
-  color: var(--c-neon-magenta);
+  color: #ff7bd8;
 }
 
-/* Shift blocks — full width, date-label overlays as absolute */
 .shifts {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  min-height: 88px;
   position: relative;
-  min-height: 64px;
 }
 
 .shift-block {
-  border-right: 1px solid rgba(37, 37, 80, 0.6);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0.75rem;
+  border-right: 1px solid rgba(76, 100, 168, 0.22);
 }
 
 .shift-block:last-child {
   border-right: none;
 }
 
-/* WORK — diagonal hatch */
 .shift-block.work {
-  background-color: rgba(255, 124, 0, 0.25);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    rgba(255, 124, 0, 0.55) 0px,
-    rgba(255, 124, 0, 0.55) 2px,
-    transparent 2px,
-    transparent 9px
-  );
+  background: rgba(255, 124, 0, 0.18);
 }
 
-/* REST — dot grid */
 .shift-block.rest {
-  background-color: rgba(57, 255, 20, 0.18);
-  background-image: radial-gradient(
-    circle,
-    rgba(57, 255, 20, 0.55) 1px,
-    transparent 1px
-  );
-  background-size: 9px 9px;
+  background: rgba(57, 255, 20, 0.11);
 }
 
-/* UNKNOWN — crosshatch on visibly distinct dark base */
 .shift-block.unknown {
-  background-color: #181830;
-  background-image:
-    repeating-linear-gradient(90deg, rgba(120, 120, 200, 0.25) 0px, rgba(120, 120, 200, 0.25) 1px, transparent 1px, transparent 12px),
-    repeating-linear-gradient(0deg,  rgba(120, 120, 200, 0.25) 0px, rgba(120, 120, 200, 0.25) 1px, transparent 1px, transparent 12px);
+  background: rgba(92, 96, 143, 0.16);
 }
 
-/* NOW indicator */
+.shift-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(4, 8, 20, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--c-text-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .timeline-indicator {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #ff1f4b;
+  background: rgba(255, 31, 75, 0.78);
   transform: translateX(-50%);
-  z-index: 10;
-  animation: pulse-line 2s ease-in-out infinite;
+  z-index: 3;
+  opacity: 0.85;
 }
 
 .now-label {
   position: absolute;
-  bottom: 100%;
+  top: 0.5rem;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 0.75rem;
+  padding: 0.14rem 0.34rem;
+  border-radius: 999px;
+  background: rgba(255, 31, 75, 0.1);
+  color: #ffd7df;
+  font-size: 0.66rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
-  color: #ff1f4b;
-  text-shadow: 0 0 6px #ff1f4b;
-  white-space: nowrap;
-  animation: now-bounce 2s ease-in-out infinite;
-  pointer-events: none;
+  letter-spacing: 0.1em;
 }
 
-/* ══════════════════════════════════════════
-   Legend
-══════════════════════════════════════════ */
 .legend {
   display: flex;
-  gap: 1.5rem;
-  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  justify-content: flex-end;
   align-items: center;
-  margin-top: 0.9rem;
-  margin-bottom: 1.4rem;
-  font-size: 0.92rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
   color: var(--c-text-secondary);
+  font-size: 0.92rem;
 }
 
 .legend-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .legend-swatch {
-  width: 22px;
+  width: 24px;
   height: 14px;
-  border-radius: 1px;
-  flex-shrink: 0;
+  border-radius: 999px;
 }
 
 .legend-swatch.work {
-  background-color: rgba(255,124,0,0.3);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    rgba(255,124,0,0.7) 0px, rgba(255,124,0,0.7) 2px,
-    transparent 2px, transparent 8px
-  );
+  background: linear-gradient(90deg, rgba(255, 124, 0, 0.92), rgba(255, 165, 79, 0.6));
 }
 
 .legend-swatch.rest {
-  background-color: rgba(57,255,20,0.2);
-  background-image: radial-gradient(circle, rgba(57,255,20,0.7) 1px, transparent 1px);
-  background-size: 7px 7px;
+  background: linear-gradient(90deg, rgba(57, 255, 20, 0.85), rgba(124, 255, 103, 0.5));
 }
 
 .legend-swatch.unknown {
-  background-color: #181830;
-  border: 1px solid rgba(120, 120, 200, 0.3);
-  background-image:
-    repeating-linear-gradient(90deg, rgba(120, 120, 200, 0.3) 0px, rgba(120, 120, 200, 0.3) 1px, transparent 1px, transparent 8px),
-    repeating-linear-gradient(0deg,  rgba(120, 120, 200, 0.3) 0px, rgba(120, 120, 200, 0.3) 1px, transparent 1px, transparent 8px);
+  background: linear-gradient(90deg, rgba(99, 109, 193, 0.75), rgba(69, 72, 109, 0.66));
 }
 
-/* ══════════════════════════════════════════
-   Load More Button
-══════════════════════════════════════════ */
+.schedule-footer {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.footer-note {
+  margin: 0;
+  color: var(--c-text-secondary);
+  font-size: 0.92rem;
+}
+
 .load-more {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.9rem 2.5rem;
-  border: 1px solid rgba(0, 245, 255, 0.45);
-  background: transparent;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.72rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 245, 255, 0.28);
+  background: rgba(0, 245, 255, 0.05);
   color: var(--c-neon-cyan);
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.9rem;
+  font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: 0.18s ease;
 }
 
 .load-more:hover {
-  background: rgba(0, 245, 255, 0.08);
-  border-color: rgba(0, 245, 255, 0.8);
-  box-shadow: 0 0 14px rgba(0,245,255,0.15);
+  background: rgba(0, 245, 255, 0.11);
+  border-color: rgba(0, 245, 255, 0.55);
+  box-shadow: 0 8px 24px rgba(0, 245, 255, 0.12);
 }
 
 .load-more:active {
-  background: rgba(0, 245, 255, 0.2);
-  transform: scale(0.98);
+  transform: translateY(1px);
 }
 
-/* ══════════════════════════════════════════
-   Compact height  ≤ 1080px tall (desktop)
-   Ensures legend + button fit without scroll
-══════════════════════════════════════════ */
-@media (max-height: 960px) and (min-width: 1600px) {
-  .container {
-    padding-top: 1.5rem;
-    padding-bottom: 1.5rem;
-  }
-
-  .header {
-    margin-bottom: 1rem;
-  }
-
-  .title {
-    gap: 0.1rem;
-    margin: 0 0 0.75rem;
-  }
-
-  .title-zh {
-    font-size: clamp(1.4rem, 4vw, 2.2rem);
-  }
-
-  .title-en {
-    font-size: clamp(0.9rem, 2.5vw, 1.15rem);
-  }
-
-  .status-panel {
-    padding: 1rem 2rem;
-    gap: 0.15rem;
-    margin-bottom: 1.25rem;
-  }
-
-  .status-zh {
-    font-size: clamp(1.8rem, 6vw, 2.8rem);
-  }
-
-  .status-en {
-    margin-bottom: 0.4rem;
-  }
-
-  .shifts {
-    min-height: 52px;
-  }
-
-  .legend {
-    margin-top: 0.5rem;
-    margin-bottom: 0.75rem;
-  }
-}
-
-/* ══════════════════════════════════════════
-   Screen reader only
-══════════════════════════════════════════ */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -899,68 +895,267 @@ const timelineStyle = computed((): CSSProperties => {
   border: 0;
 }
 
-/* ══════════════════════════════════════════
-   Mobile  ≤ 480px
-══════════════════════════════════════════ */
+@media (min-width: 1500px) {
+  .container {
+    max-width: 1480px;
+  }
+
+  .status-main {
+    grid-template-columns: minmax(0, 2fr) minmax(440px, 1fr);
+  }
+
+  .day-row,
+  .shifts {
+    min-height: 94px;
+  }
+}
+
+@media (min-width: 2400px) {
+  .container {
+    max-width: 2280px;
+  }
+
+  .title {
+    font-size: 2.9rem;
+  }
+
+  .status-panel {
+    padding: 0.9rem 1.05rem;
+  }
+
+  .status-zh {
+    font-size: 3.75rem;
+  }
+
+  .schedule-shell {
+    gap: 0.65rem;
+  }
+
+  .schedule-container {
+    --date-label-w: 100px;
+  }
+
+  .day-row,
+  .shifts {
+    min-height: 96px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .header {
+    margin-bottom: 0.8rem;
+  }
+
+  .status-main {
+    grid-template-columns: 1fr;
+  }
+
+  .status-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .schedule-head,
+  .schedule-footer {
+    align-items: start;
+  }
+}
+
+@media (max-width: 720px) {
+  .container {
+    border-radius: 18px;
+  }
+
+  .contact-advice,
+  .subtitle,
+  .section-desc,
+  .footer-note {
+    font-size: 0.95rem;
+  }
+
+  .status-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card {
+    padding: 0.58rem 0.72rem;
+  }
+
+  .schedule-container {
+    --date-label-w: 74px;
+  }
+
+  .section-axis {
+    font-size: 0.74rem;
+  }
+
+  .time-axis {
+    height: 2rem;
+  }
+
+  .time-axis span {
+    top: 0.52rem;
+    font-size: 0.8rem;
+  }
+
+  .day-row,
+  .shifts {
+    min-height: 76px;
+  }
+
+  .shift-block {
+    padding: 0.55rem 0.4rem;
+  }
+
+  .shift-badge {
+    font-size: 0.74rem;
+    padding: 0.15rem 0.45rem;
+  }
+
+  .legend {
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 480px) {
   .container {
-    --card-px: 0.875rem;
-    padding: 1.5rem 0.875rem;
+    --panel-px: 0.9rem;
+    padding-top: 1rem;
+    border-radius: 14px;
   }
 
   .container::before,
   .container::after {
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
+    top: 10px;
   }
 
-  .schedule-container {
-    --date-label-w: 58px;
+  .eyebrow {
+    font-size: 0.74rem;
   }
 
-  .title-en {
-    font-size: 0.82rem;
-    letter-spacing: 0.14em;
-  }
-
-  .title-zh {
-    font-size: 1.8rem;
+  .title {
+    font-size: 1.64rem;
   }
 
   .status-panel {
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1.5rem;
+    padding: 0.78rem;
   }
 
   .status-zh {
-    font-size: 2.5rem;
+    font-size: 2.08rem;
   }
 
-  .section-axis {
-    font-size: 0.72rem;
+  .countdown {
+    font-size: 1rem;
+  }
+
+  .next-shift-detail {
+    font-size: 0.86rem;
+  }
+
+  .schedule-container {
+    --date-label-w: 64px;
+  }
+
+  .date-md {
+    font-size: 0.84rem;
+  }
+
+  .date-dow {
+    font-size: 0.74rem;
   }
 
   .time-axis span {
-    font-size: 0.75em;
-  }
-
-  .date-md  { font-size: 0.8rem; }
-  .date-dow { font-size: 0.7rem; }
-
-  .legend {
-    gap: 1rem;
-    font-size: 0.85rem;
-  }
-
-  .load-more {
-    width: 100%;
-    justify-content: center;
-    font-size: 0.9rem;
+    font-size: 0.72rem;
   }
 
   .btn-en,
   .btn-sep {
     display: none;
+  }
+
+  .btn-zh {
+    white-space: nowrap;
+  }
+
+  .load-more {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .shift-badge {
+    display: none;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 960px) {
+  .container {
+    padding-top: 1rem;
+    padding-bottom: 1.15rem;
+  }
+
+  .header {
+    gap: 0.22rem;
+    margin-bottom: 0.72rem;
+  }
+
+  .title {
+    font-size: clamp(1.9rem, 3.2vw, 2.65rem);
+  }
+
+  .subtitle {
+    font-size: 0.93rem;
+  }
+
+  .status-panel {
+    margin-bottom: 0.64rem;
+    padding: 0.64rem 0.76rem;
+  }
+
+  .status-main {
+    gap: 0.65rem;
+  }
+
+  .status-zh {
+    font-size: clamp(2rem, 4vw, 3rem);
+  }
+
+  .countdown {
+    font-size: 1rem;
+  }
+
+  .next-shift-detail {
+    font-size: 0.88rem;
+  }
+
+  .metric-card {
+    padding: 0.56rem 0.68rem;
+  }
+
+  .schedule-shell {
+    gap: 0.62rem;
+  }
+
+  .section-desc {
+    font-size: 0.9rem;
+  }
+
+  .day-row,
+  .shifts {
+    min-height: 78px;
+  }
+
+  .shift-block {
+    padding: 0.58rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }
 </style>

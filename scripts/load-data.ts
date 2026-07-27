@@ -75,10 +75,23 @@ filenames.forEach((inputFilename) => {
   workbook.SheetNames.forEach((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
 
-    const dataEdge = "J3";
-    const dataEdgePos = XLSX.utils.decode_cell(dataEdge);
-    const row = dataEdgePos.r;
-    const col = dataEdgePos.c;
+    const row = XLSX.utils.decode_cell("A3").r;
+    const headerRow = row - 1;
+    const sheetRange = XLSX.utils.decode_range(sheet["!ref"] ?? "A1");
+    let col = -1;
+
+    for (let c = sheetRange.s.c; c <= sheetRange.e.c; c++) {
+      const cell = XLSX.utils.encode_cell({ r: headerRow, c });
+      const value = sheet[cell]?.v;
+      if (typeof value === "string" && value.includes("月")) {
+        col = c;
+        break;
+      }
+    }
+
+    if (col === -1) {
+      throw new Error(`Unable to find the month header in sheet ${sheetName}`);
+    }
 
     let names: any[] = [];
     let nameRowEnd = row + 1;
@@ -97,15 +110,45 @@ filenames.forEach((inputFilename) => {
       } while (continueRead);
     }
 
-    let dates: any[] = [];
-    let dateColEnd = col + 1;
+    const weekdayLabels = new Set(["日", "一", "二", "三", "四", "五", "六"]);
+    let dateColStart = col + 1;
+
+    while (dateColStart <= sheetRange.e.c) {
+      const cell = XLSX.utils.encode_cell({ r: row, c: dateColStart });
+      if (Number(sheet[cell]?.v) === 1) {
+        break;
+      }
+      dateColStart++;
+    }
+
+    if (dateColStart > sheetRange.e.c) {
+      throw new Error(`Unable to find day 1 in sheet ${sheetName}`);
+    }
+
+    const dates: number[] = [];
+    let dateColEnd = dateColStart;
     {
       let continueRead = true;
       do {
-        const cell = XLSX.utils.encode_cell({ r: row, c: dateColEnd });
-        const data: XLSX.CellObject = sheet[cell];
-        if (!isNaN(Number(data.v))) {
-          dates.push(data.v);
+        const dateCell = XLSX.utils.encode_cell({ r: row, c: dateColEnd });
+        const weekdayCell = XLSX.utils.encode_cell({
+          r: headerRow,
+          c: dateColEnd,
+        });
+        const dateValue = sheet[dateCell]?.v;
+        const weekdayValue = sheet[weekdayCell]?.v;
+        const validDate = dateValue != null && !isNaN(Number(dateValue));
+        const validWeekday =
+          typeof weekdayValue === "string" && weekdayLabels.has(weekdayValue);
+
+        if (validDate || validWeekday) {
+          const inferredDate = dates.length + 1;
+          if (!validDate || !validWeekday) {
+            console.warn(
+              `Invalid calendar header in ${sheetName} at ${dateCell}/${weekdayCell}; using day ${inferredDate}`
+            );
+          }
+          dates.push(inferredDate);
         } else {
           continueRead = false;
         }
@@ -129,7 +172,10 @@ filenames.forEach((inputFilename) => {
       }[] = [];
       for (let j = 0; j < dates.length; j++) {
         const date = dates[j];
-        const cell = XLSX.utils.encode_cell({ r: row + i + 1, c: col + j + 1 });
+        const cell = XLSX.utils.encode_cell({
+          r: row + i + 1,
+          c: dateColStart + j,
+        });
         const data: XLSX.CellObject = sheet[cell];
         const value = data.v;
         shifts.push({
